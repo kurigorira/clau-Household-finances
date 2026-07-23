@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type Kind, type Method, type Transaction } from '../db/schema';
+import { db, newUid, type Kind, type Method, type Transaction } from '../db/schema';
 import { today } from '../lib/fiscal';
 import { dateLabel, yen } from '../lib/format';
+import { autoSyncIfConnected } from '../lib/driveSync';
 
 export default function Entry() {
   const [kind, setKind] = useState<Kind>('expense');
@@ -50,6 +51,7 @@ export default function Entry() {
   const save = async () => {
     if (!canSave || categoryId == null) return;
     await db.transactions.add({
+      uid: newUid(),
       date,
       amount: Number(amount),
       kind,
@@ -63,11 +65,15 @@ export default function Entry() {
     setMemo('');
     setSavedFlash(`${yen(Number(amount))} を記帳しました`);
     setTimeout(() => setSavedFlash(''), 2500);
+    autoSyncIfConnected();
   };
 
-  const remove = async (id?: number) => {
-    if (id == null) return;
-    if (confirm('この記帳を削除しますか?')) await db.transactions.delete(id);
+  const remove = async (tx: Transaction) => {
+    if (tx.id == null) return;
+    if (!confirm('この記帳を削除しますか?')) return;
+    if (tx.uid) await db.deletions.put({ uid: tx.uid, deletedAt: new Date().toISOString() });
+    await db.transactions.delete(tx.id);
+    autoSyncIfConnected();
   };
 
   return (
@@ -173,7 +179,7 @@ export default function Entry() {
                 {tx.kind === 'expense' ? '−' : '+'}
                 {yen(tx.amount)}
               </span>
-              <button className="danger-ghost" onClick={() => remove(tx.id)}>削除</button>
+              <button className="danger-ghost" onClick={() => remove(tx)}>削除</button>
             </li>
           ))}
         </ul>

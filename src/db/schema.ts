@@ -6,6 +6,7 @@ export type Source = 'manual' | 'mf';
 
 export interface Transaction {
   id?: number;
+  uid?: string; // 端末間同期用の一意ID
   date: string; // YYYY-MM-DD
   amount: number; // 常に正の値。kindで収入/支出を区別
   kind: Kind;
@@ -77,6 +78,12 @@ export interface MfMapping {
   categoryId: number;
 }
 
+// 削除された記帳の記録 (同期時に他端末へ削除を伝えるため)
+export interface Deletion {
+  uid: string;
+  deletedAt: string;
+}
+
 export interface Setting {
   key: string;
   value: string;
@@ -90,6 +97,7 @@ export class KakeiboDB extends Dexie {
   balances!: Table<BalanceSnapshot, number>;
   recurring!: Table<RecurringItem, number>;
   mfMappings!: Table<MfMapping, number>;
+  deletions!: Table<Deletion, string>;
   settings!: Table<Setting, string>;
 
   constructor() {
@@ -104,7 +112,25 @@ export class KakeiboDB extends Dexie {
       mfMappings: '++id, &mfKey',
       settings: 'key',
     });
+    this.version(2)
+      .stores({
+        transactions: '++id, uid, date, categoryId, cardId, mfHash, [kind+date]',
+        deletions: 'uid',
+      })
+      .upgrade((tx) =>
+        tx
+          .table('transactions')
+          .toCollection()
+          .modify((t) => {
+            if (!t.uid) t.uid = newUid();
+          }),
+      );
   }
+}
+
+export function newUid(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export const db = new KakeiboDB();

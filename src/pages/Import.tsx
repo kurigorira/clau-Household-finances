@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type Transaction } from '../db/schema';
+import { db, newUid, type Transaction } from '../db/schema';
 import { decodeCsvFile, guessCategoryName, mfHashOf, parseMfCsv, type MfRow } from '../lib/mfCsv';
 import { yen } from '../lib/format';
+import { autoSyncIfConnected } from '../lib/driveSync';
 
 interface PreviewRow {
   mf: MfRow;
@@ -81,6 +82,7 @@ export default function Import() {
     setBusy(true);
     try {
       const txs: Transaction[] = targets.map((r) => ({
+        uid: newUid(),
         date: r.mf.date,
         amount: Math.abs(r.mf.amount),
         kind: r.mf.amount > 0 ? 'income' : 'expense',
@@ -99,6 +101,7 @@ export default function Import() {
       }
       setDone(`${targets.length}件を取り込みました (重複 ${rows.filter((r) => r.duplicate).length}件はスキップ)`);
       setRows([]);
+      autoSyncIfConnected();
     } finally {
       setBusy(false);
     }

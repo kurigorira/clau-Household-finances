@@ -135,6 +135,7 @@ export async function seedIfEmpty(): Promise<boolean> {
     }));
     await db.recurring.bulkAdd(recurring as RecurringItem[]);
     await db.settings.put({ key: 'seededAt', value: new Date().toISOString() });
+    await db.settings.put({ key: 'mastersUpdatedAt', value: new Date().toISOString() });
   });
   return true;
 }
